@@ -55,9 +55,13 @@ class TodoList:
     def load_tasks(self):
         # Загружает список задач из файла, если он существует
         if os.path.exists(self.filename):
-            with open(self.filename, 'r') as f:
-                tasks_data = json.load(f)
-                self.tasks = [Task(task['description']) for task in tasks_data]
-                for index, task in enumerate(tasks_data):
-                    if task['completed']:
-                        self.tasks[index].mark_completed()
+            try:
+                with open(self.filename, 'r') as f:
+                    tasks_data = json.load(f)
+                    self.tasks = [Task(task['description']) for task in tasks_data]
+                    for index, task in enumerate(tasks_data):
+                        if task.get('completed', False):
+                            self.tasks[index].mark_completed()
+            except (json.JSONDecodeError, TypeError) as e:
+                print(f"Ошибка при загрузке задач: {e}. Файл может быть поврежден.")
+                self.tasks = []
