@@ -1,62 +1,62 @@
 import json
 import os
 from dataclasses import dataclass, asdict
-from typing import Dict, List
-
-
+from typing import Dict, List, Optional
 @dataclass
 class Product:
-    """    Класс, представляющий товар в магазине.    """
+    """Класс, представляющий товар в магазине."""
     id: int
     name: str
     price: float
     quantity: int
-
-
 class ShopList:
     """
     Модель магазина, управляющая товарами и продажами,
     а также сохранением и загрузкой данных из JSON файла.
     """
-
-    
     def __init__(self, filename='shop_data.json'):
         """
         Инициализация модели магазина.
         """
         self.filename = filename
-        self.products: Dict[str, Product] = {}  # Словарь товаров, ключ — название
-        self.sales: List[Dict] = []             # Список совершённых продаж
-        self._next_id: int = 1                  # Счётчик для генерации уникальных id товаров
-        self.load_data()                        # Загружаем данные из файла при инициализации
-
+        self.products: Dict[int, Product] = {}
+        self.sales: List[Dict] = []
+        self._next_id: int = 1
+        self.load_data()
 
     def add_product(self, name: str, price: float, quantity: int):
         """
-        Добавляет новый товар или обновляет существующий.
-        Если товар с таким названием уже есть, увеличивает количество и обновляет цену.
-        После изменения сохраняет данные.
+        Добавляет новый товар с уникальным id.
+        Если товар с таким названием уже существует, создаёт новый товар.
         """
-        if name in self.products:
-            product = self.products[name]
-            product.quantity += quantity
-            product.price = price
-        else:
+        # Проверяем, существует ли товар с таким же названием
+        import os
+        print(f'[DEBUG] Модель импортирована из: {os.path.abspath(__file__)}')
+        print('[DEBUG] Вызван метод add_product')
+        existing_product = next((prod for prod in self.products.values() if prod.name == name), None)
+        if existing_product:
+            # Если товар существует, создаем новый с уникальным id
             product = Product(id=self._next_id, name=name, price=price, quantity=quantity)
-            self.products[name] = product
+            self.products[self._next_id] = product
             self._next_id += 1
+            print(f'[DEBUG] Добавлен новый товар: {product}')  # Отладочный вывод
+        else:
+            # Если товара нет, добавляем его как новый
+            product = Product(id=self._next_id, name=name, price=price, quantity=quantity)
+            self.products[self._next_id] = product
+            self._next_id += 1
+            print(f'[DEBUG] Добавлен товар: {product}')  # Отладочный вывод
         self.save_data()
 
-    def get_products(self) -> Dict[str, Product]:
-        """    Возвращает копию словаря всех товаров.    """
+    def get_products(self) -> Dict[int, Product]:
+        """
+        Возвращает копию словаря всех товаров.
+        """
         return self.products.copy()
     
-    def get_product_by_id(self, product_id: int):
-        """    Поиск товара по его уникальному id.    """
-        for product in self.products.values():
-            if product.id == product_id:
-                return product
-        return None
+    def get_product_by_id(self, product_id: int) -> Optional[Product]:
+        """Поиск товара по его уникальному id."""
+        return self.products.get(product_id, None)
 
     def sell_product(self, product_id: int, quantity: int):
         product = self.get_product_by_id(product_id)
@@ -76,17 +76,16 @@ class ShopList:
         return True, total_price  # Успешная продажа
 
     def generate_report(self):
-        """    Формирует отчет о продажах.    """
+        """Формирует отчёт о продажах."""
         total_sales_sum = sum(sale['total_price'] for sale in self.sales)
         sales_details = self.sales.copy()
         return total_sales_sum, sales_details
-    
+
     def save_data(self):
         """
-        Сохраняет текущие данные магазина в JSON файл.
-        Преобразует объекты Product в словари для записи.
+        Сохраняет данные с ключом по id (числу, приведённому к строке).
         """
-        products_data = {name: asdict(prod) for name, prod in self.products.items()}
+        products_data = {str(pid): asdict(prod) for pid, prod in self.products.items()}
         data = {
             'products': products_data,
             'sales': self.sales,
@@ -96,15 +95,27 @@ class ShopList:
             json.dump(data, f, ensure_ascii=False, indent=4)
 
     def load_data(self):
-        """
-        Загружает данные магазина из JSON файла, если он существует.
-        Восстанавливает объекты Product из сохранённых словарей.
-        """
-        if not os.path.exists(self.filename):
-            return
-        with open(self.filename, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        products_data = data.get('products', {})
-        self.products = {name: Product(**prod_dict) for name, prod_dict in products_data.items()}
-        self.sales = data.get('sales', [])
-        self._next_id = data.get('_next_id', 1)
+       if not os.path.exists(self.filename):
+           print('[DEBUG] Файл данных не найден, инициализация пустой базы.')
+           return
+       with open(self.filename, 'r', encoding='utf-8') as f:
+           data = json.load(f)
+       products_data = data.get('products', {})
+       self.products = {}
+       for pid_str, prod_dict in products_data.items():
+           try:
+               pid = int(pid_str)
+               self.products[pid] = Product(**prod_dict)
+           except (ValueError, TypeError):
+               continue
+       self.sales = data.get('sales', [])
+       self._next_id = max(self.products.keys(), default=0) + 1
+       print(f'[DEBUG] Данные загружены. Всего товаров: {len(self.products)}')
+       print(f'[DEBUG] Товары: {self.products}')  # Выводим загруженные товары
+
+    def debug_print_products(self):
+        print("[DEBUG] Товары в модели:")
+        if not self.products:
+            print("  Товаров нет.")
+        for pid, product in self.products.items():
+            print(f"  ID: {pid}, Название: {product.name}, Цена: {product.price}, Количество: {product.quantity}")
